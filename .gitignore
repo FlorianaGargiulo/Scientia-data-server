@@ -1,0 +1,6 @@
+data/*
+__pycache__
+.vscode
+
+# DOCKER
+docker/elasticsearch/data
