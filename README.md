@@ -5,19 +5,22 @@
 ## Import data
 
 To import data including large amount of data, the system needs a _data set folder_ to be uploaded in the `data` folder.
-A _data set folder_ is a set of files which contains data from a common source and the necessary script to import it.
+A _data set folder_ is a set of files which contains data from a common source and some settings about the source data format.
 
 one data set folder by corpus contains:
 
-- data files (any format)
-- one import python script which uses standard python lib to import the data set
-- an optional elasticSearch mapping file for the corpus index
+- data files respecting the Scientia data structure specification
+- optional elasticSearch settings:
+  - mapping
+  - analyzers
 
-A standard python library has been developed to standardize and ease the import data script.
+## Data model
 
-## data model
+Scientia needs the incoming data to respect a data model which is partly generic, partly corpus-specific.
 
-### generic data model
+### Generic part
+
+This set of fields are the common trunk of information shared by all the corpus.
 
 - corpus
 - id_in_corpus
@@ -25,6 +28,7 @@ A standard python library has been developed to standardize and ease the import 
 - authors: string[]
 - abstract
 - date
+- keywords: string[]
 
 ### data model by corpus
 

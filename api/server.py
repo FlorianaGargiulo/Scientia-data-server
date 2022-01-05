@@ -1,9 +1,11 @@
-from os import abort
+
 from flask import Flask
-from flask import request, Response
+from flask import request, Response, abort
 from elasticsearch import Elasticsearch, helpers, exceptions
 from config import ELASTICSEARCH_HOST, ELASTICSEARCH_PORT
-import importlib
+from index_data_in_ES import index_corpus
+from validate_data import validate_iter_paper
+import os
 app = Flask(__name__)
 
 
@@ -27,10 +29,15 @@ def search(method='GET'):
 @app.route('/index')
 def index(method='GET'):
     # params
-    module = request.args.get('module')
-    method = request.args.get('method', 'index')
-    if module:
-        index_module = importlib.import_module(module)
-        return getattr(index_module, method)()
+    # try:
+    filepath = request.args.get('filepath')
+    corpus = request.args.get('corpus')
+    print(f'indexing {filepath} into {corpus}')
+    if filepath and os.path.exists(filepath):
+        results = index_corpus(corpus, validate_iter_paper(filepath))
+        return results
     else:
         abort(404)
+    # except Exception as e:
+    #     print(e)
+    #     abort(500)

@@ -1,16 +1,14 @@
 #!python
+from typing import Iterable
 from elasticsearch import Elasticsearch, helpers
-import csv
-import ast
 import json
-from itertools import groupby
-import os
+from api.model import Paper
 
-from .config import ELASTICSEARCH_HOST, ELASTICSEARCH_PORT
+from config import ELASTICSEARCH_HOST, ELASTICSEARCH_PORT
 DELETE_INDEX = True
 
 
-def index_corpus(corpus, data_iterator, specific_mapping=None, specific_settings=None):
+def index_corpus(corpus, data_iterator: Iterable[Paper], specific_mapping=None, specific_settings=None):
 
     # TODO: handle generic/specific corpus
 
@@ -39,9 +37,9 @@ def index_corpus(corpus, data_iterator, specific_mapping=None, specific_settings
     index_result, _ = helpers.bulk(es, ({
         "_op_type": "update",
         "doc_as_upsert": True,
-        "_id": f"{corpus}_{doc['id']}" % doc,
-        'doc': doc}
-        for doc in data_iterator),
+        "_id": f"{corpus}_{paper.id}",
+        'doc': json.loads(paper.json(exclude_none=True))}
+        for paper in data_iterator),
         index=corpus)
     if index_result > 0:
         return("%s documents inserted" % (index_result))
