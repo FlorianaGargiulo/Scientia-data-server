@@ -1,7 +1,11 @@
 
+from datetime import datetime
+import json
 from flask import Flask
-from flask import request, Response, abort
-from elasticsearch import Elasticsearch, helpers, exceptions
+from flask import request, abort
+from elasticsearch import Elasticsearch
+from pydantic.types import Json
+from api.model import IndexationReport, PaperDataSet
 from config import ELASTICSEARCH_HOST, ELASTICSEARCH_PORT
 from index_data_in_ES import index_corpus
 from validate_data import validate_iter_paper
@@ -27,15 +31,37 @@ def search(method='GET'):
 
 
 @app.route('/index')
-def index(method='GET'):
+def index_papers_dataset(method='GET'):
     # params
     # try:
-    filepath = request.args.get('filepath')
-    corpus = request.args.get('corpus')
-    print(f'indexing {filepath} into {corpus}')
-    if filepath and os.path.exists(filepath):
-        results = index_corpus(corpus, validate_iter_paper(filepath))
-        return results
+    paper_dataset_filepath = request.args.get('paper_dataset_filepath')
+    if paper_dataset_filepath and os.path.exists(paper_dataset_filepath):
+        # transform relative path to data to absolute
+        with open(paper_dataset_filepath, 'r', encoding='utf8') as f:
+            config = json.load(f)
+            config = PaperDataSet.parse_obj(config | {"basePath": os.path.dirname(
+                paper_dataset_filepath)})
+            app.logger.info(
+                f'indexing {config.papers_filepath} into {config.corpus}')
+            nb_document_inserted = 0
+            validation_errors: list[Json] = []
+            try:
+                nb_document_inserted = index_corpus(
+                    config.corpus, validate_iter_paper(config.papers_filepath, validation_errors))
+            except Exception as e:
+                app.logger.error(
+                    f"indexation crashed with Exception {type(e)} {e=}")
+                validation_errors.append(str(e))
+
+            report = IndexationReport(date=datetime.now(), nb_document_inserted=nb_document_inserted,
+                                      validation_errors=validation_errors if len(validation_errors) > 0 else None)
+            app.logger.info(report.json(exclude_none=True))
+            config.indexation_reports = [report] if not config.indexation_reports else [
+                *config.indexation_reports, report]
+        with open(paper_dataset_filepath, 'w', encoding='utf8') as f:
+            # write reports to file
+            f.write(config.json(exclude_none=True, indent=2))
+        return report.json(exclude_none=True)
     else:
         abort(404)
     # except Exception as e:

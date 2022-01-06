@@ -6,3 +6,6 @@ services:
   api:
     ports:
       - 5000:5000
+  kibana:
+    ports:
+      - 5601:5601

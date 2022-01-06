@@ -10,6 +10,17 @@ services:
     environment:
       - ES_JAVA_OPTS
       - TAKE_FILE_OWNERSHIP=1
+  kibana:
+    image: kibana:${KIBANA_VERSION}
+    restart: ${RESTART_POLICY}
+    environment:
+      - ELASTICSEARCH_HOSTS=http://elasticsearch:9200
+      # - SERVER_BASEPATH=/kibana
+      # - XPACK_SECURITY_ENABLED=true
+      # - ELASTICSEARCH_USERNAME=kibana_system
+      # - ELASTICSEARCH_PASSWORD=${KIBANA_ES_PASSWORD}
+    depends_on:
+      - elasticsearch 
   api:
     build:
       context: ./api

@@ -1,12 +1,76 @@
 from datetime import date
 from enum import Enum
+import pathlib
 from typing import Optional
+from flask import current_app
 import prefixdate
 from pydantic import BaseModel, Field, validator, root_validator
 from prefixdate import parse, normalize_date, Precision, DatePrefix
+from pydantic.types import Json
+from pathlib import Path
+
+from pydantic.utils import path_type
+from datetime import datetime
+import os
+
+
+class IndexationReport(BaseModel):
+    """
+    Indexation task report
+    """
+    date: datetime
+    nb_document_inserted: int
+    validation_errors: Optional[list[str]]
+
+
+class PaperDataSet(BaseModel):
+    """
+    Paper Data Set configuration
+    """
+    corpus: str
+    source: str
+    papers_filepath: str
+    basePath: Optional[str]
+    citations_filepath: Optional[str]
+    elasticsearch_settings: Optional[dict]
+    elasticsearch_mappings: Optional[dict]
+    indexation_reports: Optional[list[IndexationReport]]
+
+    @root_validator()
+    def validate_filepaths(cls, values):
+
+        def validate_datafilepath(field):
+            # common validation method for papers and citation data filepath
+            pathToData = Path(values[field])
+            # checking absolute/relative path
+            newAbsolutePath = None
+            if not pathToData.is_absolute() and "basePath" in values:
+                # make path absolute
+                newAbsolutePath = os.path.join(
+                    values['basePath'], values[field])
+                pathToData = Path(newAbsolutePath)
+
+            # check existence and type
+            assert path_type(pathToData) in [
+                'file', 'symlink'], 'papers_filepath must point to a file'
+            # store the absolute path
+            if newAbsolutePath:
+                values[field] = newAbsolutePath
+
+        if "basePath" in values:
+            assert path_type(Path(values["basePath"])) == 'directory'
+        validate_datafilepath("papers_filepath")
+        if 'citations_filepath' in values and values['citations_filepath']:
+            validate_datafilepath("citations_filepath")
+
+        return values
 
 
 class Author(BaseModel):
+    """
+    Academic Papers's author metadata object
+    """
+
     # some source might assign id to authors which can be useful to disambiguate
     id: Optional[str]
     firstname: Optional[str]
@@ -27,6 +91,9 @@ class Author(BaseModel):
 
 
 class Journal(BaseModel):
+    """
+    Academic Journal metadata object
+    """
     # some source might assign id to authors which can be useful to disambiguate
     id: Optional[str]
     name: str
@@ -35,7 +102,7 @@ class Journal(BaseModel):
 
 class Paper(BaseModel):
     """
-    Paper objects store paper information
+    Academic Paper metadata object
     """
     id: str
     title: str
@@ -57,6 +124,22 @@ class Paper(BaseModel):
         else:
             return date
 
+    def to_elasticsearch(self):
+        document = self.dict(exclude_none=True)
+        if self.date:
+            precision = None
+            if self.date.precision in [Precision.DAY, Precision.HOUR, Precision.MINUTE, Precision.FULL]:
+                precision = "day"
+            if self.date.precision == Precision.MONTH:
+                precision = "month"
+            if self.date.precision == Precision.YEAR:
+                precision = "year"
+
+            if precision:
+                document["date"] = {
+                    "date": self.date.dt, "precision": precision}
+        return document
+
     class Config:
         title = 'Research Paper'
         arbitrary_types_allowed = True
@@ -64,37 +147,3 @@ class Paper(BaseModel):
         json_encoders = {
             DatePrefix: lambda d: d.text
         }
-
-
-# this is equivalent to json.dumps(MainModel.schema(), indent=2):
-# print(Paper.schema_json(indent=2))
-if __name__ == "__main__":
-    paper = {
-        "id": "lpoip",
-        "date": "2002-05",
-        "title": "aozpeizapeoi",
-        "authors": [{"lastname": "Girard"}],
-        "extrafield": "oiuoiu"}
-    paper = {
-        "id": "arXiv:2109.09709",
-        "title": "Information Dynamics and The Arrow of Time",
-        "date": "2021-09-16",
-        "authors": [
-            {
-                "fullname": "Aram Ebtekar"
-            }
-        ],
-        "keywords": [
-            "cond-mat.stat-mech",
-            "cs.IT",
-            "nlin.CG"
-        ],
-        "extrafield": 5,
-        "abstract": "Time appears to pass irreversibly. In light of CPT symmetry, the Universe's initial condition is thought to be somehow responsible. We propose a model, the stochastic partitioned cellular automaton (SPCA), in which to study the mechanisms and consequences of emergent irreversibility. While their most natural definition is probabilistic, we show that SPCA dynamics can be made deterministic and reversible, by attaching randomly initialized degrees of freedom. This property motivates analogies to classical field theories. We develop the foundations of non-equilibrium statistical mechanics on SPCAs. Of particular interest are the second law of thermodynamics, and a mutual information law which proves fundamental in non-equilibrium settings. We believe that studying the dynamics of information on SPCAs will yield insights on foundational topics in computer engineering, the sciences, and the philosophy of mind. As evidence of this, we discuss several such applications, including an extension of Landauer's principle, and sketch a physical justification of the causal decision theory that underlies the so-called psychological arrow of time."
-
-    }
-
-    Paper.validate(paper)
-    o = Paper.parse_obj(paper)
-    print(o.date, o.date.precision, o.extrafield)
-    print(o.authors)
