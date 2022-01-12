@@ -6,17 +6,16 @@ from api.model import Paper
 from flask import current_app
 
 from config import ELASTICSEARCH_HOST, ELASTICSEARCH_PORT
-DELETE_INDEX = True
 
 
-def index_corpus(corpus, data_iterator: Iterable[Paper], specific_mappings=None, specific_settings=None):
+def index_corpus(source, corpus, data_iterator: Iterable[Paper], reset=False, specific_mappings=None, specific_settings=None):
 
     # TODO: handle generic/specific corpus
 
     current_app.logger.info("Starting data indexation")
     es = Elasticsearch('%s:%s' % (ELASTICSEARCH_HOST, ELASTICSEARCH_PORT))
-    index = f'scientia_{corpus}'
-    if es.indices.exists(index=index) and DELETE_INDEX:
+    index = f'scientia_{source}'
+    if es.indices.exists(index=index) and reset:
         current_app.logger.info('index %s deleted' % index)
         es.indices.delete(index=index)
     if not es.indices.exists(index=index):
@@ -35,9 +34,18 @@ def index_corpus(corpus, data_iterator: Iterable[Paper], specific_mappings=None,
     # index batch to ES
     index_result, _ = helpers.bulk(es, ({
         "_op_type": "update",
-        "doc_as_upsert": True,
-        "_id": f"{corpus}_{paper.id}",
-        'doc': paper.to_elasticsearch()}
+        '_id': paper.id,
+        'upsert': paper.to_elasticsearch() | {"corpus": [corpus]},
+        'script': {
+            "source": """
+                if (!ctx._source.corpus.contains(params.corpus))
+                    ctx._source.corpus.add(params.corpus)
+            """.replace('\n', ' '),
+            "lang": "painless",
+            "params": {
+                "corpus": corpus
+            }
+        }, }
         for paper in data_iterator),
         index=index)
     if index_result > 0:

@@ -30,11 +30,13 @@ def search(method='GET'):
     return results
 
 
-@app.route('/index')
+@app.route('/import-paper-dataset')
 def index_papers_dataset(method='GET'):
     # params
     # try:
-    paper_dataset_filepath = request.args.get('paper_dataset_filepath')
+    paper_dataset_filepath = request.args.get('filepath')
+    reset = request.args.get('reset-source-index') != None
+    app.logger.info(reset)
     if paper_dataset_filepath and os.path.exists(paper_dataset_filepath):
         # transform relative path to data to absolute
         with open(paper_dataset_filepath, 'r', encoding='utf8') as f:
@@ -46,8 +48,8 @@ def index_papers_dataset(method='GET'):
             nb_document_inserted = 0
             validation_errors: list[Json] = []
             try:
-                nb_document_inserted = index_corpus(
-                    config.corpus, validate_iter_paper(config.papers_filepath, validation_errors))
+                nb_document_inserted = index_corpus(config.source,
+                                                    config.corpus, validate_iter_paper(config.papers_filepath, validation_errors), reset)
             except Exception as e:
                 app.logger.error(
                     f"indexation crashed with Exception {type(e)} {e=}")

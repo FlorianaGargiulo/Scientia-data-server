@@ -98,13 +98,14 @@ class Journal(BaseModel):
     id: Optional[str]
     name: str
     editor: Optional[str]
+    ISSN: Optional[str]
 
 
 class Paper(BaseModel):
     """
     Academic Paper metadata object
     """
-    id: str
+    id: Optional[str]
     title: str
     date: Optional[DatePrefix] = Field(
         title='date',
