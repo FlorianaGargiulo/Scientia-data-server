@@ -36,7 +36,7 @@ def index_papers_dataset(method='GET'):
     # try:
     paper_dataset_filepath = request.args.get('filepath')
     reset = request.args.get('reset-source-index') != None
-    app.logger.info(reset)
+
     if paper_dataset_filepath and os.path.exists(paper_dataset_filepath):
         # transform relative path to data to absolute
         with open(paper_dataset_filepath, 'r', encoding='utf8') as f:

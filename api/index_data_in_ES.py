@@ -8,6 +8,28 @@ from flask import current_app
 from config import ELASTICSEARCH_HOST, ELASTICSEARCH_PORT
 
 
+def create_upsert_action(data_iterator: Iterable[Paper], corpus: str):
+    counter = 0
+    for paper in data_iterator:
+        if counter % 10000 == 0:
+            current_app.logger.info(f'indexed {counter} papers')
+        yield {
+            "_op_type": "update",
+            '_id': paper.id,
+            'upsert': paper.to_elasticsearch() | {"corpus": [corpus]},
+            'script': {
+                "source": """
+                    if (!ctx._source.corpus.contains(params.corpus))
+                        ctx._source.corpus.add(params.corpus)
+                """.replace('\n', ' '),
+                "lang": "painless",
+                "params": {
+                    "corpus": corpus
+                }
+            }, }
+        counter += 1
+
+
 def index_corpus(source, corpus, data_iterator: Iterable[Paper], reset=False, specific_mappings=None, specific_settings=None):
 
     # TODO: handle generic/specific corpus
@@ -32,21 +54,6 @@ def index_corpus(source, corpus, data_iterator: Iterable[Paper], reset=False, sp
     es.indices.open(index=index)
 
     # index batch to ES
-    index_result, _ = helpers.bulk(es, ({
-        "_op_type": "update",
-        '_id': paper.id,
-        'upsert': paper.to_elasticsearch() | {"corpus": [corpus]},
-        'script': {
-            "source": """
-                if (!ctx._source.corpus.contains(params.corpus))
-                    ctx._source.corpus.add(params.corpus)
-            """.replace('\n', ' '),
-            "lang": "painless",
-            "params": {
-                "corpus": corpus
-            }
-        }, }
-        for paper in data_iterator),
-        index=index)
+    index_result, _ = helpers.bulk(es, create_upsert_action(data_iterator, corpus), index=index)
     if index_result > 0:
         return(index_result)
