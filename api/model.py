@@ -1,10 +1,11 @@
 from datetime import date
 from enum import Enum
 import pathlib
+from tokenize import Number
 from typing import Optional
 from flask import current_app
 import prefixdate
-from pydantic import BaseModel, Field, validator, root_validator
+from pydantic import AnyUrl, BaseModel, Field, validator, root_validator
 from prefixdate import parse, normalize_date, Precision, DatePrefix
 from pydantic.types import Json
 from pathlib import Path
@@ -31,6 +32,7 @@ class PaperDataSet(BaseModel):
     source: str
     papers_filepath: str
     basePath: Optional[str]
+    nb_papers: Optional[int]
     citations_filepath: Optional[str]
     elasticsearch_settings: Optional[dict]
     elasticsearch_mappings: Optional[dict]
@@ -44,7 +46,7 @@ class PaperDataSet(BaseModel):
             pathToData = Path(values[field])
             # checking absolute/relative path
             newAbsolutePath = None
-            if not pathToData.is_absolute() and "basePath" in values:
+            if not pathToData.is_absolute() and "basePath" in values and values['basePath']:
                 # make path absolute
                 newAbsolutePath = os.path.join(
                     values['basePath'], values[field])
@@ -57,13 +59,22 @@ class PaperDataSet(BaseModel):
             if newAbsolutePath:
                 values[field] = newAbsolutePath
 
-        if "basePath" in values:
+        if values["basePath"]:
             assert path_type(Path(values["basePath"])) == 'directory'
         validate_datafilepath("papers_filepath")
-        if 'citations_filepath' in values and values['citations_filepath']:
+        if values['citations_filepath']:
             validate_datafilepath("citations_filepath")
 
         return values
+
+
+class Affiliation(BaseModel):
+    id: Optional[str]
+    name: str
+    homepage: Optional[AnyUrl]
+
+    class Config:
+        extra = 'allow'
 
 
 class Author(BaseModel):
@@ -76,7 +87,8 @@ class Author(BaseModel):
     firstname: Optional[str]
     lastname: Optional[str]
     fullname: str
-    institution: Optional[str]
+    institution: Optional[Affiliation]
+    queryLevel: Optional[str]
 
     @root_validator(pre=True)
     def fullname_from_firstname_lastname(cls, values):
@@ -97,7 +109,7 @@ class Journal(BaseModel):
     # some source might assign id to authors which can be useful to disambiguate
     id: Optional[str]
     name: str
-    editor: Optional[str]
+    publisher: Optional[str]
     ISSN: Optional[str]
 
 
@@ -106,7 +118,7 @@ class Paper(BaseModel):
     Academic Paper metadata object
     """
     id: Optional[str]
-    title: str
+    title: Optional[str]
     date: Optional[DatePrefix] = Field(
         title='date',
         description='publication date as YYYY, YYYY-MM or YYYY-MM-DD',
@@ -116,6 +128,8 @@ class Paper(BaseModel):
     keywords: Optional[list[str]]
     abstract: Optional[str]
     journal: Optional[Journal]
+    publisher: Optional[str]
+    doi: Optional[str]
 
     @validator('date', pre=True)
     def year_validation(cls, v):
