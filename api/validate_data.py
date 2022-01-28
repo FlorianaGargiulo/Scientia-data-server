@@ -3,7 +3,7 @@ import os
 from pydantic.types import Json
 from model import Paper
 import ndjson
-import json
+import casanova
 from flask import current_app
 
 
@@ -29,3 +29,15 @@ def validate_iter_paper(filepath, errors_collector: list[Json] = None):
                     raise e
     else:
         raise Exception(f"file {filepath} could not be found.")
+
+
+def iter_citations(filepath):
+    current_app.logger.info([filepath, os.path.exists(filepath)])
+    if os.path.exists(filepath):
+        with casanova.reader(filepath) as reader:
+            citing_pos = reader.headers.citing
+            cited_pos = reader.headers.cited
+            for citation in reader:
+                yield {"citing": citation[citing_pos], "cited": citation[cited_pos]}
+    else:
+        raise Exception("Citation file can't be found")

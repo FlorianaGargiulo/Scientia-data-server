@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from datetime import date
 from enum import Enum
 import pathlib
@@ -21,6 +23,7 @@ class IndexationReport(BaseModel):
     """
     date: datetime
     nb_document_inserted: int
+    nb_citations_inserted: Optional[int]
     validation_errors: Optional[list[str]]
 
 
@@ -132,7 +135,7 @@ class Paper(BaseModel):
     doi: Optional[str]
 
     @validator('date', pre=True)
-    def year_validation(cls, v):
+    def date_validation(cls, v):
         date = prefixdate.parse(v)
         if not date:
             raise ValueError(f'{v} Date format invalid')
@@ -155,6 +158,22 @@ class Paper(BaseModel):
                     "date": self.date.dt, "precision": precision}
         return document
 
+    @classmethod
+    def from_elasticsearch(cls, source_obj: dict) -> Paper:
+
+        if "date" in source_obj:
+            precision = None
+            if source_obj['date']['precision'] == "day":
+                precision = Precision.DAY
+            if source_obj['date']['precision'] == "month":
+                precision = Precision.MONTH
+            if source_obj['date']['precision'] == "year":
+                precision = Precision.YEAR
+
+            return Paper.parse_obj(source_obj | {'date': prefixdate.DatePrefix(source_obj['date']['date'], precision)})
+        else:
+            return Paper.parse_obj(source_obj)
+
     class Config:
         title = 'Research Paper'
         arbitrary_types_allowed = True
@@ -162,3 +181,8 @@ class Paper(BaseModel):
         json_encoders = {
             DatePrefix: lambda d: d.text
         }
+
+
+class Citation(BaseModel):
+    citing: str
+    cited: str

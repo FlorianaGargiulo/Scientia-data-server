@@ -121,7 +121,7 @@ def create_mag_corpus(path: str, corpus: str):
     # generic function to create a corpus from arxiv CSV file
 
     # create the NDJSON file
-    filepath = os.path.join(os.path.dirname(__file__), f"{corpus}.ndjson")
+    filepath = os.path.join(os.path.dirname(__file__), corpus, f"{corpus}.ndjson")
     with open(filepath, 'w', encoding='utf8') as output_f:
         start = time.time()
         nb_buffer_written = 0
@@ -148,8 +148,11 @@ def create_mag_corpus(path: str, corpus: str):
     # create the dataset config file
     # this config file points to the data file and contains the mandatory corpus metadata
     # it will also be used to store indexation reports
-    config: PaperDataSet = PaperDataSet(corpus=corpus, source="microsoft_academic_graph", papers_filepath=f"{corpus}.ndjson", nb_paper=nb_paper)
-    with open(f"{corpus}_corpus.json", "w", encoding="utf8") as f:
+
+    citation_filename = "citationNetwork.csv"
+    config: PaperDataSet = PaperDataSet(corpus=corpus, source="microsoft_academic_graph", papers_filepath=f"{corpus}.ndjson",
+                                        citations_filepath=citation_filename if os.path.exists(os.path.join(os.path.dirname(__file__), corpus, "citationNetwork.csv")) else None, nb_paper=nb_paper)
+    with open(os.path.join(os.path.dirname(__file__), corpus, f"{corpus}_corpus.json"), "w", encoding="utf8") as f:
         f.write(config.json(exclude_none=True, ensure_ascii=False, indent=2))
 
 
