@@ -10,7 +10,8 @@ from config import ELASTICSEARCH_HOST, ELASTICSEARCH_PORT
 from index_data_in_ES import index_citations, index_papers
 from validate_data import iter_citations, validate_iter_paper
 import os
-import networkx as nx
+from networks import generate_citations_network, generate_coreferences_network
+
 app = Flask(__name__)
 
 
@@ -103,41 +104,25 @@ def index_papers_dataset(method='GET'):
 # TODO: add field selection as input
 
 
-def format_node_for_network(obj: dict):
-    paper = Paper.from_elasticsearch(obj)
-    date = {"date": paper.date.text} if paper.date else {}
-    authors = {"authors": ", ".join((a.fullname for a in paper.authors))} if paper.authors else {}
-    return paper.dict(exclude_none=True) | authors | date
-
-
-def generate_citations_network(search_body):
-    es = Elasticsearch('%s:%s' % (ELASTICSEARCH_HOST, ELASTICSEARCH_PORT))
-    network = nx.DiGraph()
-    # retrieve papers
-    papers = []
-
-    network.add_nodes_from((result['_id'], format_node_for_network(result['_source'])) for result in helpers.scan(es, search_body))
-    # retrieve citations
-    # TODO: terms list is limited to 65k we must check that limit
-    citations_query = {"query": {
-        "bool": {
-            "filter": {
-                "terms": {"citing": list(network.nodes())}
-            }, }}}
-    for citation in helpers.scan(es, citations_query):
-        if citation['_source']['cited'] in network:
-            network.add_edge(citation['_source']['citing'], citation['_source']['cited'])
-    return nx.generate_gexf(network)
-
-
 @app.route('/citations_network.gexf')
 def citations_network_gexf(method='GET'):
     # params
     size = request.args.get('size', 1000)
     source = request.args.get('source', None)
     search_body = json.loads(request.data)
-    current_app.logger.debug(search_body)
     search_body['size'] = size
     search_body['_source'] = ['_id', 'title', 'authors', 'date']
 
     return app.response_class(generate_citations_network(search_body), mimetype='text/xml')
+
+
+@app.route('/coreferences_network.gexf')
+def coreferences_network_gexf(method='GET'):
+    # params
+    size = request.args.get('size', 1000)
+    source = request.args.get('source', None)
+    search_body = json.loads(request.data)
+    search_body['size'] = size
+    search_body['_source'] = ['_id', 'title', 'authors', 'date']
+
+    return app.response_class(generate_coreferences_network(search_body), mimetype='text/xml')
